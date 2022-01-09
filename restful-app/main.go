@@ -1,32 +1,35 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"fmt"
+	"github.com/go-pg/pg/v10"
 )
 
-type Album struct {
-	ID     string  `json:"id"`
-	Title  string  `json:"title"`
-	Artist string  `json:"artist"`
-	Price  float64 `json:"price"`
+var opts = pg.Options{
+	Addr:     ":5438",
+	User:     "admin",
+	Password: "example",
+	Database: "albums",
 }
 
-var albums = []Album{
-	{ID: "1", Title: "Piove Ancora", Artist: "Silent Bob", Price: 20.00},
-	{ID: "2", Title: "Dawn FM", Artist: "The Weeknd", Price: 50.50},
-	{ID: "3", Title: "My Turn", Artist: "Lil Baby", Price: 30.00},
-	{ID: "4", Title: "X2", Artist: "Sick Luke", Price: 15.00},
-}
+var db *pg.DB
 
-func getAlbums(c *gin.Context) {
+func getAlbumsHandler(c *gin.Context) {
+
+	albums := selectAllAlbums(db)
+
+	if albums == nil {
+		albums = []Album{}
+	}
+
 	c.IndentedJSON(http.StatusOK, albums)
+
 }
 
-func insertAlbum(c *gin.Context) {
+func postAlbumHandler(c *gin.Context) {
 	var newAlbum Album
 
 	if err := c.BindJSON(&newAlbum); err != nil {
@@ -34,32 +37,87 @@ func insertAlbum(c *gin.Context) {
 		return
 	}
 
-	albums = append(albums, newAlbum)
+	err := insertAlbum(db, newAlbum)
+
+	if err != nil {
+		return
+	}
 
 	c.IndentedJSON(http.StatusCreated, newAlbum)
 }
 
-func getSpecificAlbum(c *gin.Context) {
+func getSpecificAlbumHandler(c *gin.Context) {
 
 	var id = c.Param("id")
 
-	for _, album := range albums {
-		if album.ID == id {
-			c.IndentedJSON(http.StatusOK, album)
+	album, err := selectSingleAlbum(db, id)
 
-			return
-		}
+	if err != nil {
+		return
+	}
+
+	if album != nil {
+		c.IndentedJSON(http.StatusOK, album)
+
+		return
 	}
 
 	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "album not found"})
 }
 
+func deleteAlbumHandle(c *gin.Context) {
+
+	var id = c.Param("id")
+
+	err := deleteAlbum(db, id)
+
+	if err != nil {
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func editAlbumHandle(c *gin.Context) {
+	var albumEdited Album
+
+	if err := c.BindJSON(&albumEdited); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	id := c.Param("id")
+	albumEdited.ID = id
+
+	err := editAlbum(db, albumEdited)
+
+	if err != nil {
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, albumEdited)
+}
+
 func main() {
+
+	db = pg.Connect(&opts)
+
+	defer db.Close()
+
+	// err := createSchema(db)
+
+	// if err != nil {
+	// 	panic(err)
+	// }
+
 	router := gin.Default()
 
-	router.GET("/albums", getAlbums)
-	router.GET("/albums/:id", getSpecificAlbum)
-	router.POST("/albums", insertAlbum)
+	router.GET("/albums", getAlbumsHandler)
+	router.GET("/albums/:id", getSpecificAlbumHandler)
+	router.POST("/albums", postAlbumHandler)
+	router.PUT("/albums/:id", editAlbumHandle)
+	router.DELETE("/albums/:id", deleteAlbumHandle)
 
 	router.Run("localhost:8080")
+
 }
