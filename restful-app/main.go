@@ -3,16 +3,29 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-pg/pg/v10"
 )
 
+func goDotEnvVariable(key string) string {
+
+	// // load .env file
+	// err := godotenv.Load(".env")
+
+	// if err != nil {
+	// 	log.Fatalf("Error loading .env file")
+	// }
+
+	return os.Getenv(key)
+}
+
 var opts = pg.Options{
-	Addr:     ":5438",
-	User:     "admin",
-	Password: "example",
-	Database: "albums",
+	Addr:     goDotEnvVariable("POSTGRES_ADDR"),
+	User:     goDotEnvVariable("POSTGRES_USER"),
+	Password: goDotEnvVariable("POSTGRES_PASSWORD"),
+	Database: goDotEnvVariable("POSTGRES_DATABASE"),
 }
 
 var db *pg.DB
